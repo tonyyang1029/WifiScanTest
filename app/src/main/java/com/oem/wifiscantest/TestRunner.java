@@ -137,6 +137,11 @@ public class TestRunner {
 
             jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 5000);
         } else {
+            msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
+            msg.obj = "Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure;
+            mUiHandler.sendMessage(msg);
+            Log.i(Constants.TAG, "Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure);
+
             jumpTo(Constants.MSG_CMD_SCAN, 1000);
         }
     }

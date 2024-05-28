@@ -140,7 +140,7 @@ public class TestRunner {
             mWifiManager.enableNetwork(configs.get(configIdx).networkId, true);
             //mWifiManager.reconnect();
 
-            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 50000);
+            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 10000);
         } else {
             msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
             msg.obj = "Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure;

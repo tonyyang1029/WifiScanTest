@@ -90,6 +90,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         @Override
         public void handleMessage(@NonNull Message msg) {
             switch (msg.what) {
+                case Constants.MSG_UI_CLEAR_TEXT:
+                    mTextView.setText("");
+                    break;
+
                 case Constants.MSG_UI_SHOW_TEXT:
                     mTextView.setText(msg.obj + "\n");
                     break;

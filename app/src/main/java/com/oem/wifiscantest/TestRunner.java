@@ -10,6 +10,7 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.Message;
+import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -80,6 +81,8 @@ public class TestRunner {
         intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
         mCtxt.registerReceiver(mScanReceiver, intentFilter);
 
+        SystemClock.sleep(500);
+
         mWifiManager.setWifiEnabled(true);
         mWifiManager.startScan();
 
@@ -131,11 +134,13 @@ public class TestRunner {
             intentFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
             mCtxt.registerReceiver(mConnectReceiver, intentFilter);
 
+            SystemClock.sleep(500);
+
             //mWifiManager.disconnect();
             mWifiManager.enableNetwork(configs.get(configIdx).networkId, true);
             //mWifiManager.reconnect();
 
-            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 5000);
+            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 50000);
         } else {
             msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
             msg.obj = "Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure;

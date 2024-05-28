@@ -4,6 +4,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -41,6 +42,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mBtnStart.setText("START");
         mBtnStart.setOnClickListener(this);
 
+        Log.i(Constants.TAG, "Version: v1.3");
     }
 
     @Override

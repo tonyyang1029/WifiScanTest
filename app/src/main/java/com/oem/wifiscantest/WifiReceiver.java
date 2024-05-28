@@ -35,9 +35,7 @@ public class WifiReceiver extends BroadcastReceiver {
             Log.i(Constants.TAG, "-> Broadcast received, " + WifiManager.NETWORK_STATE_CHANGED_ACTION + info.toString());
             if (info.getType() == ConnectivityManager.TYPE_WIFI &&
                 info.getState() == NetworkInfo.State.CONNECTED) {
-                Message msg = mHandler.obtainMessage(Constants.MSG_CMD_COMPLETE);
-                msg.obj = mWifiManager.getConnectionInfo().getSSID();
-                mHandler.sendMessage(msg);
+                mHandler.sendEmptyMessage(Constants.MSG_CMD_COMPLETE);
             }
         }
     }

@@ -117,6 +117,11 @@ public class TestRunner {
         }
         mUiHandler.sendMessage(msg);
 
+        msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
+        msg.obj = "-> Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure;
+        mUiHandler.sendMessage(msg);
+        Log.i(Constants.TAG, "-> Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure);
+
         configIdx = chooseConfiguredNetwork(results, configs);
         if ( configIdx != -1) {
             String ssid = configs.get(configIdx).SSID;
@@ -133,48 +138,48 @@ public class TestRunner {
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
             mCtxt.registerReceiver(mConnectReceiver, intentFilter);
-
             SystemClock.sleep(500);
 
-            //mWifiManager.disconnect();
+            mWifiManager.disconnect();
+            SystemClock.sleep(500);
             mWifiManager.enableNetwork(configs.get(configIdx).networkId, true);
-            //mWifiManager.reconnect();
 
-            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 10000);
+            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 60000);
         } else {
-            msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-            msg.obj = "Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure;
-            mUiHandler.sendMessage(msg);
-            Log.i(Constants.TAG, "Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure);
-
-            jumpTo(Constants.MSG_CMD_SCAN, 1000);
+            jumpTo(Constants.MSG_CMD_SCAN, 10000);
         }
     }
 
-    private synchronized void complete() {
+    private synchronized void complete(boolean timeout) {
         if (mState != Constants.MSG_CMD_WAIT_CONNECT_RESULT) {
             return;
         }
 
-        if (mConnectReceiver != null) {
-            mCtxt.unregisterReceiver(mConnectReceiver);
-            mConnectReceiver = null;
-        }
-
         WifiInfo info = mWifiManager.getConnectionInfo();
         String ssid = info.getSSID().substring(1, info.getSSID().length() - 1);
+
         if (mConnectingSsid.equals(ssid)) {
             Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
             msg.obj = "-> Connected to " + mConnectingSsid;
             mUiHandler.sendMessage(msg);
             Log.i(Constants.TAG, "-> Connected to " + mConnectingSsid);
 
-            msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-            msg.obj = "Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure;
-            mUiHandler.sendMessage(msg);
-            Log.i(Constants.TAG, "Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure);
+            if (mConnectReceiver != null) {
+                mCtxt.unregisterReceiver(mConnectReceiver);
+                mConnectReceiver = null;
+            }
 
-            jumpTo(Constants.MSG_CMD_SCAN, 1000);
+            jumpTo(Constants.MSG_CMD_SCAN, 10000);
+        } else {
+            if (timeout) {
+                if (mConnectReceiver != null) {
+                    mCtxt.unregisterReceiver(mConnectReceiver);
+                    mConnectReceiver = null;
+                }
+
+                Log.i(Constants.TAG, "Timeout for waiting for connection result.");
+                jumpTo(Constants.MSG_CMD_SCAN, 10000);
+            }
         }
     }
 
@@ -252,12 +257,14 @@ public class TestRunner {
 
                 case Constants.MSG_CMD_WAIT_CONNECT_RESULT:
                     if (mCount == msg.arg1) {
-                        complete();
+                        complete(true);
+                    } else {
+                        Log.i(Constants.TAG, "Skip MSG_CMD_WAIT_CONNECT_RESULT command");
                     }
                     break;
 
                 case Constants.MSG_CMD_COMPLETE:
-                    complete();
+                    complete(false);
                     break;
 
                 case Constants.MSG_CMD_STOP_SELF:

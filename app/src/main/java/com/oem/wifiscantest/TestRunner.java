@@ -26,11 +26,12 @@ public class TestRunner {
     private WifiReceiver mScanReceiver = null;
     private WifiReceiver mConnectReceiver = null;
     private int mState = Constants.MSG_CMD_UNKNOWN;
-    private int mCount = 0;
+    private int mScanCount = 0;
     private int mScanSuccess = 0;
     private int mScanFailure = 0;
+    private int mConnectionCount = 0;
     private int mConnectionSuccess = 0;
-    private int mConnectionFailure = 0;
+    private int mConnectionTimeout = 0;
     private String mConnectingSsid = null;
 
     public TestRunner(Context ctxt, Handler uiHandler) {
@@ -50,11 +51,12 @@ public class TestRunner {
     }
 
     private void init() {
-        mCount = 0;
+        mScanCount = 0;
         mScanSuccess = 0;
         mScanFailure = 0;
+        mConnectionCount = 0;
         mConnectionSuccess = 0;
-        mConnectionFailure = 0;
+        mConnectionTimeout = 0;
 
         Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_SHOW_TEXT, "Initializing Wi-Fi tester");
         mUiHandler.sendMessage(msg);
@@ -65,17 +67,17 @@ public class TestRunner {
     }
 
     private void scan() {
-        if (mCount == Constants.MAX_TEST_COUNT) {
+        if (mScanCount == Constants.MAX_TEST_COUNT) {
             jumpTo(Constants.MSG_CMD_STOP_SELF, 0);
             return;
         }
 
-        mCount++;
+        mScanCount++;
 
         Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_TEST_START);
-        msg.obj = "No. " + mCount + " Test\n-> Start scanning";
+        msg.obj = "No. " + mScanCount + " Test\n-> Start scanning";
         mUiHandler.sendMessage(msg);
-        Log.i(Constants.TAG, "No. " + mCount + " Test");
+        Log.i(Constants.TAG, "No. " + mScanCount + " Test");
         Log.i(Constants.TAG, "-> Start scanning");
 
         if (mScanReceiver == null) {
@@ -122,9 +124,9 @@ public class TestRunner {
         mUiHandler.sendMessage(msg);
 
         msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-        msg.obj = "-> Total Scan: " + mCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure;
+        msg.obj = "-> Total Scan: " + mScanCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure;
         mUiHandler.sendMessage(msg);
-        Log.i(Constants.TAG, "-> Total Scan: " + mCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure);
+        Log.i(Constants.TAG, "-> Total Scan: " + mScanCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure);
 
         configIdx = chooseConfiguredNetwork(results, configs);
         if ( configIdx != -1) {
@@ -146,6 +148,7 @@ public class TestRunner {
 
             mWifiManager.disconnect();
             SystemClock.sleep(500);
+            mConnectionCount++;
             mWifiManager.enableNetwork(configs.get(configIdx).networkId, true);
 
             jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 60000);
@@ -164,6 +167,7 @@ public class TestRunner {
 
         if (mConnectingSsid.equals(ssid)) {
             mConnectionSuccess++;
+            mTestHandler.removeMessages(Constants.MSG_CMD_WAIT_CONNECT_RESULT);
 
             Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
             msg.obj = "-> Connected to " + mConnectingSsid;
@@ -176,14 +180,14 @@ public class TestRunner {
             }
 
             msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-            msg.obj = "-> Total Connection: " + mCount + ", Success: " + mConnectionSuccess + ", Failure: " + mConnectionFailure;
+            msg.obj = "-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout;
             mUiHandler.sendMessage(msg);
-            Log.i(Constants.TAG, "-> Total Connection: " + mCount + ", Success: " + mConnectionSuccess + ", Failure: " + mConnectionFailure);
+            Log.i(Constants.TAG, "-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout);
 
             jumpTo(Constants.MSG_CMD_SCAN, 10000);
         } else {
             if (timeout) {
-                mConnectionFailure++;
+                mConnectionTimeout++;
 
                 if (mConnectReceiver != null) {
                     mCtxt.unregisterReceiver(mConnectReceiver);
@@ -191,9 +195,9 @@ public class TestRunner {
                 }
 
                 Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-                msg.obj = "-> Total Connection: " + mCount + ", Success: " + mConnectionSuccess + ", Failure: " + mConnectionFailure;
+                msg.obj = "-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout;
                 mUiHandler.sendMessage(msg);
-                Log.i(Constants.TAG, "-> Total Connection: " + mCount + ", Success: " + mConnectionSuccess + ", Failure: " + mConnectionFailure);
+                Log.i(Constants.TAG, "-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout);
 
                 jumpTo(Constants.MSG_CMD_SCAN, 10000);
             }
@@ -218,7 +222,7 @@ public class TestRunner {
 
         if (cmd == Constants.MSG_CMD_WAIT_CONNECT_RESULT) {
             Message msg = mTestHandler.obtainMessage(cmd);
-            msg.arg1 = mCount;
+            msg.arg1 = mScanCount;
             mTestHandler.sendMessageDelayed(msg, delayInMs);
         } else {
             if (delayInMs == 0) {
@@ -233,20 +237,30 @@ public class TestRunner {
         int configIdx = -1;
         WifiConfiguration wifiConfig = null;
 
-        if (results.size() != 0 && configs.size() != 0) {
+        if (!results.isEmpty() && !configs.isEmpty()) {
             if (configs.size() >= 2) {
-                wifiConfig = configs.get(mCount % 2);
+                wifiConfig = configs.get(mScanCount % 2);
             } else {
                 wifiConfig = configs.get(0);
             }
 
+            String ssid =  wifiConfig.SSID.substring(1, wifiConfig.SSID.length() - 1);
             for (ScanResult result : results) {
-                if (wifiConfig.SSID.contains(result.SSID)) {
+                if (ssid.equals(result.SSID)) {
                     configIdx = configs.indexOf(wifiConfig);
                     break;
                 }
             }
+
+            if (configIdx == -1) {
+                Log.i(Constants.TAG, "The configured network is not found.");
+            }
+        } else if (configs.isEmpty()) {
+            Log.i(Constants.TAG, "Configured Networks: 0");
+        } else {
+            Log.i(Constants.TAG, "Scan Results: 0");
         }
+
         return configIdx;
     }
 
@@ -273,7 +287,7 @@ public class TestRunner {
                     break;
 
                 case Constants.MSG_CMD_WAIT_CONNECT_RESULT:
-                    if (mCount == msg.arg1) {
+                    if (mScanCount == msg.arg1) {
                         complete(true);
                     } else {
                         Log.i(Constants.TAG, "Skip MSG_CMD_WAIT_CONNECT_RESULT command");

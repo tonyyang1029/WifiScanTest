@@ -3,7 +3,7 @@ package com.oem.wifiscantest;
 public class Constants {
     static final String TAG = "WifiScanTest";
 
-    static final int MAX_TEST_COUNT         = 3000;
+    static final int MAX_TEST_COUNT         = 100;
 
     static final int MSG_UI_UNKNOWN         = -1;
     static final int MSG_UI_CLEAR_TEXT      = 1;

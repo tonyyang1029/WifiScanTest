@@ -62,7 +62,7 @@ public class TestRunner {
         mUiHandler.sendMessage(msg);
         Log.i(Constants.TAG, "Initializing Wi-Fi tester");
 
-        mWifiManager.setWifiEnabled(false);
+        //mWifiManager.setWifiEnabled(false);
         jumpTo(Constants.MSG_CMD_SCAN, 0);
     }
 

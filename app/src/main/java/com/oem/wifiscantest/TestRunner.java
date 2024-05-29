@@ -27,8 +27,10 @@ public class TestRunner {
     private WifiReceiver mConnectReceiver = null;
     private int mState = Constants.MSG_CMD_UNKNOWN;
     private int mCount = 0;
-    private int mSuccess = 0;
-    private int mFailure = 0;
+    private int mScanSuccess = 0;
+    private int mScanFailure = 0;
+    private int mConnectionSuccess = 0;
+    private int mConnectionFailure = 0;
     private String mConnectingSsid = null;
 
     public TestRunner(Context ctxt, Handler uiHandler) {
@@ -49,8 +51,10 @@ public class TestRunner {
 
     private void init() {
         mCount = 0;
-        mSuccess = 0;
-        mFailure = 0;
+        mScanSuccess = 0;
+        mScanFailure = 0;
+        mConnectionSuccess = 0;
+        mConnectionFailure = 0;
 
         Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_SHOW_TEXT, "Initializing Wi-Fi tester");
         mUiHandler.sendMessage(msg);
@@ -107,20 +111,20 @@ public class TestRunner {
 
         Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_TEST_PROGRESS);
         if (success) {
-            mSuccess++;
+            mScanSuccess++;
             msg.obj = "-> Receive scanning result -> Success, " + results.size() + " Wi-Fi APs";
             Log.i(Constants.TAG, "-> Receive scanning result -> Success, " + results.size() + " Wi-Fi APs");
         } else {
-            mFailure++;
+            mScanFailure++;
             msg.obj = "-> Receive scanning result -> Failure";
             Log.i(Constants.TAG, "-> Receive scanning result -> Failure");
         }
         mUiHandler.sendMessage(msg);
 
         msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-        msg.obj = "-> Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure;
+        msg.obj = "-> Total Scan: " + mCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure;
         mUiHandler.sendMessage(msg);
-        Log.i(Constants.TAG, "-> Total: " + mCount + ", Success: " + mSuccess + ", Failure: " + mFailure);
+        Log.i(Constants.TAG, "-> Total Scan: " + mCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure);
 
         configIdx = chooseConfiguredNetwork(results, configs);
         if ( configIdx != -1) {
@@ -159,6 +163,8 @@ public class TestRunner {
         String ssid = info.getSSID().substring(1, info.getSSID().length() - 1);
 
         if (mConnectingSsid.equals(ssid)) {
+            mConnectionSuccess++;
+
             Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
             msg.obj = "-> Connected to " + mConnectingSsid;
             mUiHandler.sendMessage(msg);
@@ -169,15 +175,26 @@ public class TestRunner {
                 mConnectReceiver = null;
             }
 
+            msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
+            msg.obj = "-> Total Connection: " + mCount + ", Success: " + mConnectionSuccess + ", Failure: " + mConnectionFailure;
+            mUiHandler.sendMessage(msg);
+            Log.i(Constants.TAG, "-> Total Connection: " + mCount + ", Success: " + mConnectionSuccess + ", Failure: " + mConnectionFailure);
+
             jumpTo(Constants.MSG_CMD_SCAN, 10000);
         } else {
             if (timeout) {
+                mConnectionFailure++;
+
                 if (mConnectReceiver != null) {
                     mCtxt.unregisterReceiver(mConnectReceiver);
                     mConnectReceiver = null;
                 }
 
-                Log.i(Constants.TAG, "Timeout for waiting for connection result.");
+                Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
+                msg.obj = "-> Total Connection: " + mCount + ", Success: " + mConnectionSuccess + ", Failure: " + mConnectionFailure;
+                mUiHandler.sendMessage(msg);
+                Log.i(Constants.TAG, "-> Total Connection: " + mCount + ", Success: " + mConnectionSuccess + ", Failure: " + mConnectionFailure);
+
                 jumpTo(Constants.MSG_CMD_SCAN, 10000);
             }
         }

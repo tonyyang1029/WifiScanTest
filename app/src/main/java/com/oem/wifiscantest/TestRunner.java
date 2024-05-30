@@ -8,6 +8,7 @@ import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiEnterpriseConfig;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
@@ -16,7 +17,14 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class TestRunner {
     private Context mCtxt;
@@ -33,6 +41,7 @@ public class TestRunner {
     private int mConnectionSuccess = 0;
     private int mConnectionTimeout = 0;
     private String mConnectingSsid = null;
+    private FileOutputStream mLogFile = null;
 
     public TestRunner(Context ctxt, Handler uiHandler) {
         mCtxt = ctxt;
@@ -58,9 +67,7 @@ public class TestRunner {
         mConnectionSuccess = 0;
         mConnectionTimeout = 0;
 
-        Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_SHOW_TEXT, "Initializing Wi-Fi tester");
-        mUiHandler.sendMessage(msg);
-        Log.i(Constants.TAG, "Initializing Wi-Fi tester");
+        saveLog("Initializing Wi-Fi tester", Constants.SAVE_TYPE_UI | Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_SHOW_TEXT);
 
         //mWifiManager.setWifiEnabled(false);
         jumpTo(Constants.MSG_CMD_SCAN, 0);
@@ -74,14 +81,11 @@ public class TestRunner {
 
         mScanCount++;
 
-        Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_TEST_START);
-        msg.obj = "No. " + mScanCount + " Test\n-> Start scanning";
-        mUiHandler.sendMessage(msg);
-        Log.i(Constants.TAG, "No. " + mScanCount + " Test");
-        Log.i(Constants.TAG, "-> Start scanning");
+        saveLog("No. " + mScanCount + " Test", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_START);
+        saveLog("-> Start scanning", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
 
         if (mScanReceiver == null) {
-            mScanReceiver = new WifiReceiver(mTestHandler, mWifiManager);
+            mScanReceiver = new WifiReceiver(mTestHandler);
         }
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
@@ -111,35 +115,25 @@ public class TestRunner {
         results = mWifiManager.getScanResults();
         configs = mWifiManager.getConfiguredNetworks();
 
-        Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_TEST_PROGRESS);
         if (success) {
             mScanSuccess++;
-            msg.obj = "-> Receive scanning result -> Success, " + results.size() + " Wi-Fi APs";
-            Log.i(Constants.TAG, "-> Receive scanning result -> Success, " + results.size() + " Wi-Fi APs");
+            saveLog("-> Receive scanning result -> Success, " + results.size() + " Wi-Fi APs", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
         } else {
             mScanFailure++;
-            msg.obj = "-> Receive scanning result -> Failure";
-            Log.i(Constants.TAG, "-> Receive scanning result -> Failure");
+            saveLog("-> Receive scanning result -> Failure", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
         }
-        mUiHandler.sendMessage(msg);
 
-        msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-        msg.obj = "-> Total Scan: " + mScanCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure;
-        mUiHandler.sendMessage(msg);
-        Log.i(Constants.TAG, "-> Total Scan: " + mScanCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure);
+
+        saveLog("-> Total Scan: " + mScanCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure, Constants.SAVE_TYPE_ALL,Constants.MSG_UI_TEST_PROGRESS);
 
         configIdx = chooseConfiguredNetwork(results, configs);
         if ( configIdx != -1) {
             String ssid = configs.get(configIdx).SSID;
             mConnectingSsid = ssid.substring(1, ssid.length() - 1);
-            msg = mUiHandler.obtainMessage(Constants.MSG_UI_TEST_PROGRESS);
-            msg.what = Constants.MSG_UI_TEST_PROGRESS;
-            msg.obj = "-> Start connecting to " + mConnectingSsid;
-            mUiHandler.sendMessage(msg);
-            Log.i(Constants.TAG, "-> Start connecting to " + mConnectingSsid);
+            saveLog("-> Start connecting to " + mConnectingSsid, Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
 
             if (mConnectReceiver == null) {
-                mConnectReceiver = new WifiReceiver(mTestHandler, mWifiManager);
+                mConnectReceiver = new WifiReceiver(mTestHandler);
             }
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
@@ -151,13 +145,13 @@ public class TestRunner {
             mConnectionCount++;
             mWifiManager.enableNetwork(configs.get(configIdx).networkId, true);
 
-            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, 60000);
+            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, Constants.MAX_WAIT_TIME);
         } else {
-            jumpTo(Constants.MSG_CMD_SCAN, 10000);
+            jumpTo(Constants.MSG_CMD_SCAN, Constants.MAX_INTERVAL_TIME);
         }
     }
 
-    private synchronized void complete(boolean timeout) {
+    private synchronized void finish(boolean timeout) {
         if (mState != Constants.MSG_CMD_WAIT_CONNECT_RESULT) {
             return;
         }
@@ -168,38 +162,22 @@ public class TestRunner {
         if (mConnectingSsid.equals(ssid)) {
             mConnectionSuccess++;
             mTestHandler.removeMessages(Constants.MSG_CMD_WAIT_CONNECT_RESULT);
-
-            Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-            msg.obj = "-> Connected to " + mConnectingSsid;
-            mUiHandler.sendMessage(msg);
-            Log.i(Constants.TAG, "-> Connected to " + mConnectingSsid);
-
             if (mConnectReceiver != null) {
                 mCtxt.unregisterReceiver(mConnectReceiver);
                 mConnectReceiver = null;
             }
-
-            msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-            msg.obj = "-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout;
-            mUiHandler.sendMessage(msg);
-            Log.i(Constants.TAG, "-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout);
-
-            jumpTo(Constants.MSG_CMD_SCAN, 10000);
+            jumpTo(Constants.MSG_CMD_SCAN, Constants.MAX_INTERVAL_TIME);
+            saveLog("-> Connected to " + mConnectingSsid, Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+            saveLog("-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout, Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
         } else {
             if (timeout) {
                 mConnectionTimeout++;
-
                 if (mConnectReceiver != null) {
                     mCtxt.unregisterReceiver(mConnectReceiver);
                     mConnectReceiver = null;
                 }
-
-                Message msg = mUiHandler.obtainMessage(Constants.MSG_UI_APPEND_TEXT);
-                msg.obj = "-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout;
-                mUiHandler.sendMessage(msg);
-                Log.i(Constants.TAG, "-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout);
-
-                jumpTo(Constants.MSG_CMD_SCAN, 10000);
+                jumpTo(Constants.MSG_CMD_SCAN, Constants.MAX_INTERVAL_TIME);
+                saveLog("-> Connecting to " + mConnectingSsid + "is timeout", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
             }
         }
     }
@@ -213,6 +191,14 @@ public class TestRunner {
         if (mConnectReceiver != null) {
             mCtxt.unregisterReceiver(mConnectReceiver);
             mConnectReceiver = null;
+        }
+        if (mLogFile != null) {
+            try {
+                mLogFile.close();
+            } catch (IOException e) {
+                saveLog("Log file is not closed successfully.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
+            }
+            mLogFile = null;
         }
         mTestHandler.removeCallbacksAndMessages(null);
     }
@@ -253,15 +239,55 @@ public class TestRunner {
             }
 
             if (configIdx == -1) {
-                Log.i(Constants.TAG, "The configured network is not found.");
+                saveLog("The configured network is not found.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
             }
         } else if (configs.isEmpty()) {
-            Log.i(Constants.TAG, "Configured Networks: 0");
+            saveLog("Configured Networks: 0", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
         } else {
-            Log.i(Constants.TAG, "Scan Results: 0");
+            saveLog("Scan Results: 0", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
         }
 
         return configIdx;
+    }
+
+    private void saveLog(String log, int types, int ui) {
+        if ((types & Constants.SAVE_TYPE_UI) == Constants.SAVE_TYPE_UI) {
+            Message msg = mUiHandler.obtainMessage(ui);
+            msg.obj = log + "\n";
+            mUiHandler.sendMessage(msg);
+        }
+
+        if ((types & Constants.SAVE_TYPE_LOGCAT) == Constants.SAVE_TYPE_LOGCAT) {
+            Log.i(Constants.TAG, log);
+        }
+
+        if ((types & Constants.SAVE_TYPE_FILE) == Constants.SAVE_TYPE_FILE) {
+            saveToFile(log + "\n");
+        }
+    }
+    private void saveToFile(String log) {
+        if (mLogFile == null) {
+            File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault());
+            String name = "wifiscantest_" + dateFormat.format(new Date()) + ".log";
+            try {
+                File file = new File(dir, name);
+                file.createNewFile();
+                mLogFile = new FileOutputStream(file);
+            } catch (FileNotFoundException e) {
+                saveLog("Log file is not found.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
+                return;
+            } catch (IOException e) {
+                saveLog("Log file is not created.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
+                return;
+            }
+        }
+
+        try {
+            mLogFile.write(log.getBytes());
+        } catch (IOException e) {
+            saveLog("Log is not saved into file.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
+        }
     }
 
     class TestHandler extends Handler {
@@ -279,7 +305,7 @@ public class TestRunner {
                     break;
 
                 case Constants.MSG_CMD_WAIT_SCAN_RESULT:
-                    Log.i(Constants.TAG, "Skip MSG_CMD_WAIT_SCAN_RESULT command");
+                    saveLog("Skip MSG_CMD_WAIT_SCAN_RESULT command", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
                     break;
 
                 case Constants.MSG_CMD_CONNECT:
@@ -288,28 +314,28 @@ public class TestRunner {
 
                 case Constants.MSG_CMD_WAIT_CONNECT_RESULT:
                     if (mScanCount == msg.arg1) {
-                        complete(true);
+                        finish(true);
                     } else {
-                        Log.i(Constants.TAG, "Skip MSG_CMD_WAIT_CONNECT_RESULT command");
+                        saveLog("Skip MSG_CMD_WAIT_CONNECT_RESULT command", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
                     }
                     break;
 
-                case Constants.MSG_CMD_COMPLETE:
-                    complete(false);
+                case Constants.MSG_CMD_FINISH:
+                    finish(false);
                     break;
 
                 case Constants.MSG_CMD_STOP_SELF:
-                    mUiHandler.sendEmptyMessage(Constants.MSG_UI_TEST_COMPLETE);
+                    saveLog("Reach to max testing times! Test Complete!", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_COMPLETE);
                     stopSelf();
                     break;
 
                 case Constants.MSG_CMD_STOP:
-                    mUiHandler.sendEmptyMessage(Constants.MSG_UI_TEST_STOP);
+                    saveLog("Manually stop testing!", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_STOP);
                     stopSelf();
                     break;
 
                 default:
-                    Log.i(Constants.TAG, "Skip this command, " + msg.what);
+                    saveLog("Skip this command, " + msg.what, Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
                     break;
             }
         }

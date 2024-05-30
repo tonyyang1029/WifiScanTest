@@ -42,17 +42,25 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mBtnStart.setText("START");
         mBtnStart.setOnClickListener(this);
 
-        Log.i(Constants.TAG, "Version: v1.5.1");
+        Log.i(Constants.TAG, "Version: v1.6");
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        mBtnStart.setEnabled(false);
         mBtnStart.setText("START");
+
+        boolean requested = false;
         if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, 100);
-            mBtnStart.setEnabled(false);
-        } else {
+            requested = true;
+        }
+        if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, 100);
+            requested = true;
+        }
+        if (!requested) {
             mBtnStart.setEnabled(true);
         }
     }
@@ -68,7 +76,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (requestCode == 100) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                mBtnStart.setEnabled(true);
+                if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                    checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                    mBtnStart.setEnabled(true);
+                }
             }
         }
 
@@ -97,29 +108,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     break;
 
                 case Constants.MSG_UI_SHOW_TEXT:
-                    mTextView.setText(msg.obj + "\n");
+                case Constants.MSG_UI_TEST_START:
+                    mTextView.setText((CharSequence) msg.obj);
                     break;
 
                 case Constants.MSG_UI_APPEND_TEXT:
-                    mTextView.append(msg.obj + "\n");
-                    break;
-
-                case Constants.MSG_UI_TEST_START:
-                    mTextView.setText(msg.obj + "\n");
-                    break;
-
                 case Constants.MSG_UI_TEST_PROGRESS:
-                    mTextView.append(msg.obj + "\n");
+                    mTextView.append((CharSequence) msg.obj);
                     break;
 
                 case Constants.MSG_UI_TEST_COMPLETE:
-                    mTextView.append("Reach to max testing times \nTest Complete\n");
+                    mTextView.append((CharSequence) msg.obj);
                     mBtnStart.setText("START");
                     mUiHandler.removeCallbacksAndMessages(null);
                     break;
 
                 case Constants.MSG_UI_TEST_STOP:
-                    mTextView.append("Manually stop testing\n");
+                    mTextView.append((CharSequence) msg.obj);
                     mBtnStart.setText("START");
                     mUiHandler.removeCallbacksAndMessages(null);
                     break;

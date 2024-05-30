@@ -15,11 +15,9 @@ import java.util.Objects;
 
 public class WifiReceiver extends BroadcastReceiver {
     private Handler mHandler;
-    private WifiManager mWifiManager;
 
-    public WifiReceiver(Handler handler, WifiManager wifiManager) {
+    public WifiReceiver(Handler handler) {
         mHandler = handler;
-        mWifiManager = wifiManager;
     }
 
     @Override
@@ -35,7 +33,7 @@ public class WifiReceiver extends BroadcastReceiver {
             Log.i(Constants.TAG, "-> Broadcast received, " + WifiManager.NETWORK_STATE_CHANGED_ACTION + info.toString());
             if (info.getType() == ConnectivityManager.TYPE_WIFI &&
                 info.getState() == NetworkInfo.State.CONNECTED) {
-                mHandler.sendEmptyMessage(Constants.MSG_CMD_COMPLETE);
+                mHandler.sendEmptyMessage(Constants.MSG_CMD_FINISH);
             }
         }
     }

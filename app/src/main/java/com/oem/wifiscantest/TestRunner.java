@@ -33,11 +33,11 @@ public class TestRunner {
     private TestHandler mTestHandler;
     private WifiReceiver mScanReceiver = null;
     private WifiReceiver mConnectReceiver = null;
-    private int mState = Constants.MSG_CMD_UNKNOWN;
-    private int mScanCount = 0;
+    private int mState = Constants.TEST_STATE_UNKNOWN;
+    private int mTestCount = 0;
     private int mScanSuccess = 0;
     private int mScanFailure = 0;
-    private int mConnectionCount = 0;
+    private int mScanTimeout = 0;
     private int mConnectionSuccess = 0;
     private int mConnectionTimeout = 0;
     private String mConnectingSsid = null;
@@ -51,38 +51,101 @@ public class TestRunner {
         mTestHandler = new TestHandler();
     }
 
+    class TestHandler extends Handler {
+        Message message;
+
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            switch (msg.what) {
+                case Constants.TEST_CMD_INIT:
+                    init();
+                    break;
+
+                case Constants.TEST_CMD_SCAN:
+                    scan();
+                    break;
+
+                case Constants.TEST_CMD_RESCAN:
+                    rescan();
+                    break;
+
+                case Constants.TEST_CMD_SCAN_TIMEOUT:
+                    if (mTestCount == msg.arg1) {
+                        checkScanResult(true, 0);
+                    } else {
+                        saveLog("Skip TEST_CMD_SCAN_TIMEOUT command", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
+                    }
+                    break;
+
+                case Constants.TEST_CMD_CHECK_SCAN_RESULT:
+                    checkScanResult(msg.arg1);
+                    break;
+
+                case Constants.TEST_CMD_CONNECT:
+                    connect();
+                    break;
+
+                case Constants.TEST_CMD_CHECK_CONNECT_RESULT:
+                    checkConnectResult();
+                    break;
+
+                case Constants.TEST_CMD_CONNECT_TIMEOUT:
+                    if (mTestCount == msg.arg1) {
+                        checkConnectResult(true);
+                    } else {
+                        saveLog("Skip TEST_CMD_CONNECT_TIMEOUT command", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
+                    }
+                    break;
+
+                case Constants.TEST_CMD_STOP_SELF:
+                    stopSelf();
+                    break;
+
+                case Constants.TEST_CMD_STOP:
+                    stopTest();
+                    saveLog("-> Manually stop testing -> [" + getStateText(mState) + "]", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_STOP);
+                    break;
+
+                default:
+                    saveLog("Skip this command, " + msg.what, Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
+                    break;
+            }
+        }
+    }
+
     public void start() {
-        jumpTo(Constants.MSG_CMD_INIT, 0);
+        saveLog("The start() is called.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_NOP);
+        jumpTo(Constants.TEST_CMD_INIT, 0);
     }
 
     public void stop() {
-        jumpTo(Constants.MSG_CMD_STOP, 0);
+        saveLog("The stop() is called.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_NOP);
+        jumpTo(Constants.TEST_CMD_STOP, 0);
     }
 
     private void init() {
-        mScanCount = 0;
+        mState = Constants.TEST_STATE_INITIALIZING;
+        mTestCount = 0;
         mScanSuccess = 0;
         mScanFailure = 0;
-        mConnectionCount = 0;
+        mScanTimeout = 0;
         mConnectionSuccess = 0;
         mConnectionTimeout = 0;
 
         saveLog("Initializing Wi-Fi tester", Constants.SAVE_TYPE_UI | Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_SHOW_TEXT);
-
-        //mWifiManager.setWifiEnabled(false);
-        jumpTo(Constants.MSG_CMD_SCAN, 0);
+        jumpTo(Constants.TEST_CMD_SCAN, 0);
     }
 
     private void scan() {
-        if (mScanCount == Constants.MAX_TEST_COUNT) {
-            jumpTo(Constants.MSG_CMD_STOP_SELF, 0);
+        if (mTestCount == Constants.MAX_TEST_COUNT) {
+            jumpTo(Constants.TEST_CMD_STOP_SELF, 0);
             return;
         }
 
-        mScanCount++;
-
-        saveLog("No. " + mScanCount + " Test", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_START);
-        saveLog("-> Start scanning", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+        mState = Constants.TEST_STATE_SCANNING;
+        mTestCount++;
+        saveLog("No. " + mTestCount + " Test", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_START);
+        saveLog("-> Start scanning -> [" + getStateText(mState) + "]", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
 
         if (mScanReceiver == null) {
             mScanReceiver = new WifiReceiver(mTestHandler);
@@ -90,47 +153,76 @@ public class TestRunner {
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
         mCtxt.registerReceiver(mScanReceiver, intentFilter);
-
         SystemClock.sleep(500);
-
-        mWifiManager.setWifiEnabled(true);
         mWifiManager.startScan();
-
-        jumpTo(Constants.MSG_CMD_WAIT_SCAN_RESULT, 0);
+        jumpTo(Constants.TEST_CMD_SCAN_TIMEOUT, Constants.MAX_WAIT_TIME);
     }
 
-    private synchronized void connect(boolean success) {
-        if (mState != Constants.MSG_CMD_WAIT_SCAN_RESULT) {
+    private void rescan() {
+        mState = Constants.TEST_STATE_RESCANNING;
+        if (mScanReceiver == null) {
+            mScanReceiver = new WifiReceiver(mTestHandler);
+        }
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
+        mCtxt.registerReceiver(mScanReceiver, intentFilter);
+        SystemClock.sleep(500);
+        mWifiManager.startScan();
+        jumpTo(Constants.TEST_CMD_SCAN_TIMEOUT, Constants.MAX_WAIT_TIME);
+        saveLog("Re-scan Wi-Fi access points.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_NOP);
+    }
+
+    private void checkScanResult(int updated) {
+        checkScanResult(false, updated);
+    }
+
+    private synchronized void checkScanResult(boolean timeout, int updated) {
+        if (mState != Constants.TEST_STATE_SCANNING && mState != Constants.TEST_STATE_RESCANNING) {
             return;
         }
 
-        List<ScanResult> results = null;
-        List<WifiConfiguration> configs = null;
-        int configIdx = -1;
-
+        mTestHandler.removeMessages(Constants.TEST_CMD_SCAN_TIMEOUT);
         if (mScanReceiver != null) {
             mCtxt.unregisterReceiver(mScanReceiver);
             mScanReceiver = null;
         }
-        results = mWifiManager.getScanResults();
-        configs = mWifiManager.getConfiguredNetworks();
 
-        if (success) {
-            mScanSuccess++;
-            saveLog("-> Receive scanning result -> Success, " + results.size() + " Wi-Fi APs", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+        if (!timeout) {
+            if (mState == Constants.TEST_STATE_SCANNING) {
+                mState = Constants.TEST_STATE_SCANNED;
+                List<ScanResult> results = mWifiManager.getScanResults();
+                if (updated == 1) {
+                    mScanSuccess++;
+                    saveLog("-> Receive scanning result -> Success, " + results.size() + " Wi-Fi APs", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+                } else {
+                    mScanFailure++;
+                    saveLog("-> Receive scanning result -> Failure", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+                }
+                saveLog("-> Total Test: " + mTestCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure + ", Timeout: " + mScanTimeout + " -> [" + getStateText(mState) + "]", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+            }
+            jumpTo(Constants.TEST_CMD_CONNECT, 0);
         } else {
-            mScanFailure++;
-            saveLog("-> Receive scanning result -> Failure", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+            mState = Constants.TEST_STATE_IDLE;
+            if (mState == Constants.TEST_STATE_SCANNING) {
+                mScanTimeout++;
+                saveLog("-> Total Test: " + mTestCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure + ", Timeout: " + mScanTimeout + " -> [" + getStateText(mState) + "]", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+            }
+            jumpTo(Constants.TEST_CMD_CONNECT, Constants.MAX_SCAN_INTERVAL);
         }
+    }
 
-
-        saveLog("-> Total Scan: " + mScanCount + ", Success: " + mScanSuccess + ", Failure: " + mScanFailure, Constants.SAVE_TYPE_ALL,Constants.MSG_UI_TEST_PROGRESS);
+    private synchronized void connect() {
+        List<ScanResult> results = mWifiManager.getScanResults();;
+        List<WifiConfiguration> configs = mWifiManager.getConfiguredNetworks();
+        int configIdx = -1;
 
         configIdx = chooseConfiguredNetwork(results, configs);
-        if ( configIdx != -1) {
+        if ( configIdx >= 0) {
+            mState = Constants.TEST_STATE_CONNECTING;
+
             String ssid = configs.get(configIdx).SSID;
             mConnectingSsid = ssid.substring(1, ssid.length() - 1);
-            saveLog("-> Start connecting to " + mConnectingSsid, Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+            saveLog("-> Start connecting to " + mConnectingSsid + " -> [" + getStateText(mState) + "]", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
 
             if (mConnectReceiver == null) {
                 mConnectReceiver = new WifiReceiver(mTestHandler);
@@ -142,17 +234,22 @@ public class TestRunner {
 
             mWifiManager.disconnect();
             SystemClock.sleep(500);
-            mConnectionCount++;
             mWifiManager.enableNetwork(configs.get(configIdx).networkId, true);
 
-            jumpTo(Constants.MSG_CMD_WAIT_CONNECT_RESULT, Constants.MAX_WAIT_TIME);
+            jumpTo(Constants.TEST_CMD_CONNECT_TIMEOUT, Constants.MAX_WAIT_TIME);
+        } else if (configIdx == -1) {
+            jumpTo(Constants.TEST_CMD_RESCAN, Constants.MAX_SCAN_INTERVAL);
         } else {
-            jumpTo(Constants.MSG_CMD_SCAN, Constants.MAX_INTERVAL_TIME);
+            jumpTo(Constants.TEST_CMD_SCAN, Constants.MAX_SCAN_INTERVAL);
         }
     }
 
-    private synchronized void finish(boolean timeout) {
-        if (mState != Constants.MSG_CMD_WAIT_CONNECT_RESULT) {
+    private synchronized void checkConnectResult() {
+        checkConnectResult(false);
+    }
+
+    private synchronized void checkConnectResult(boolean timeout) {
+        if (mState != Constants.TEST_STATE_CONNECTING) {
             return;
         }
 
@@ -161,14 +258,15 @@ public class TestRunner {
 
         if (mConnectingSsid.equals(ssid)) {
             mConnectionSuccess++;
-            mTestHandler.removeMessages(Constants.MSG_CMD_WAIT_CONNECT_RESULT);
+            mTestHandler.removeMessages(Constants.TEST_CMD_CONNECT_TIMEOUT);
             if (mConnectReceiver != null) {
                 mCtxt.unregisterReceiver(mConnectReceiver);
                 mConnectReceiver = null;
             }
-            jumpTo(Constants.MSG_CMD_SCAN, Constants.MAX_INTERVAL_TIME);
+            mState = Constants.TEST_STATE_CONNECTED;
+            jumpTo(Constants.TEST_CMD_SCAN, Constants.MAX_TEST_INTERVAL);
             saveLog("-> Connected to " + mConnectingSsid, Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
-            saveLog("-> Total Connection: " + mConnectionCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout, Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+            saveLog("-> Total Test: " + mTestCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout + " -> [" + getStateText(mState) + "]", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
         } else {
             if (timeout) {
                 mConnectionTimeout++;
@@ -176,14 +274,22 @@ public class TestRunner {
                     mCtxt.unregisterReceiver(mConnectReceiver);
                     mConnectReceiver = null;
                 }
-                jumpTo(Constants.MSG_CMD_SCAN, Constants.MAX_INTERVAL_TIME);
+                mState = Constants.TEST_STATE_IDLE;
+                jumpTo(Constants.TEST_CMD_SCAN, Constants.MAX_TEST_INTERVAL);
                 saveLog("-> Connecting to " + mConnectingSsid + "is timeout", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
+                saveLog("-> Total Connection: " + mTestCount + ", Success: " + mConnectionSuccess + ", Timeout: " + mConnectionTimeout + " -> [" + getStateText(mState) + "]", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_PROGRESS);
             }
         }
     }
 
     private void stopSelf()
     {
+        stopTest();
+        saveLog("-> Reach to max testing times, Test Complete -> [" + getStateText(mState) + "]", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_COMPLETE);
+    }
+
+    private void stopTest() {
+        mState = Constants.TEST_STATE_STOP;
         if (mScanReceiver != null) {
             mCtxt.unregisterReceiver(mScanReceiver);
             mScanReceiver = null;
@@ -196,25 +302,26 @@ public class TestRunner {
             try {
                 mLogFile.close();
             } catch (IOException e) {
-                saveLog("Log file is not closed successfully.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
+                saveLog("Log file is not closed successfully", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
             }
             mLogFile = null;
         }
         mTestHandler.removeCallbacksAndMessages(null);
     }
 
-    private void jumpTo(int cmd, int delayInMs) {
-        mState = cmd;
-
-        if (cmd == Constants.MSG_CMD_WAIT_CONNECT_RESULT) {
-            Message msg = mTestHandler.obtainMessage(cmd);
-            msg.arg1 = mScanCount;
-            mTestHandler.sendMessageDelayed(msg, delayInMs);
-        } else {
-            if (delayInMs == 0) {
-                mTestHandler.sendEmptyMessage(cmd);
+    private void jumpTo(int cmd, int delayInMillis) {
+        if (cmd != Constants.TEST_CMD_UNKNOWN) {
+            if (cmd == Constants.TEST_CMD_SCAN_TIMEOUT ||
+                cmd == Constants.TEST_CMD_CONNECT_TIMEOUT) {
+                Message msg = mTestHandler.obtainMessage(cmd);
+                msg.arg1 = mTestCount;
+                mTestHandler.sendMessageDelayed(msg, Constants.MAX_WAIT_TIME);
             } else {
-                mTestHandler.sendEmptyMessageDelayed(cmd, delayInMs);
+                if (delayInMillis == 0) {
+                    mTestHandler.sendEmptyMessage(cmd);
+                } else {
+                    mTestHandler.sendEmptyMessageDelayed(cmd, delayInMillis);
+                }
             }
         }
     }
@@ -225,7 +332,7 @@ public class TestRunner {
 
         if (!results.isEmpty() && !configs.isEmpty()) {
             if (configs.size() >= 2) {
-                wifiConfig = configs.get(mScanCount % 2);
+                wifiConfig = configs.get(mTestCount % 2);
             } else {
                 wifiConfig = configs.get(0);
             }
@@ -242,8 +349,10 @@ public class TestRunner {
                 saveLog("The configured network is not found.", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
             }
         } else if (configs.isEmpty()) {
+            configIdx = -2;
             saveLog("Configured Networks: 0", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
         } else {
+            configIdx = -3;
             saveLog("Scan Results: 0", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
         }
 
@@ -290,54 +399,47 @@ public class TestRunner {
         }
     }
 
-    class TestHandler extends Handler {
-        Message message;
+    private String getStateText(int state) {
+        String text = "";
 
-        @Override
-        public void handleMessage(@NonNull Message msg) {
-            switch (msg.what) {
-                case Constants.MSG_CMD_INIT:
-                    init();
-                    break;
+        switch (state) {
+            case Constants.TEST_STATE_UNKNOWN:
+                text = "TEST_STATE_UNKNOWN";
+                break;
 
-                case Constants.MSG_CMD_SCAN:
-                    scan();
-                    break;
+            case Constants.TEST_STATE_IDLE:
+                text = "TEST_STATE_IDLE";
+                break;
 
-                case Constants.MSG_CMD_WAIT_SCAN_RESULT:
-                    saveLog("Skip MSG_CMD_WAIT_SCAN_RESULT command", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
-                    break;
+            case Constants.TEST_STATE_INITIALIZING:
+                text = "TEST_STATE_INITIALIZING";
+                break;
 
-                case Constants.MSG_CMD_CONNECT:
-                    connect(msg.arg1 == 1);
-                    break;
+            case Constants.TEST_STATE_SCANNING:
+                text = "TEST_STATE_SCANNING";
+                break;
 
-                case Constants.MSG_CMD_WAIT_CONNECT_RESULT:
-                    if (mScanCount == msg.arg1) {
-                        finish(true);
-                    } else {
-                        saveLog("Skip MSG_CMD_WAIT_CONNECT_RESULT command", Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
-                    }
-                    break;
+            case Constants.TEST_STATE_RESCANNING:
+                text = "TEST_STATE_RESCANNING";
+                break;
 
-                case Constants.MSG_CMD_FINISH:
-                    finish(false);
-                    break;
+            case Constants.TEST_STATE_SCANNED:
+                text = "TEST_STATE_SCANNED";
+                break;
 
-                case Constants.MSG_CMD_STOP_SELF:
-                    saveLog("Reach to max testing times! Test Complete!", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_COMPLETE);
-                    stopSelf();
-                    break;
+            case Constants.TEST_STATE_CONNECTING:
+                text = "TEST_STATE_CONNECTING";
+                break;
 
-                case Constants.MSG_CMD_STOP:
-                    saveLog("Manually stop testing!", Constants.SAVE_TYPE_ALL, Constants.MSG_UI_TEST_STOP);
-                    stopSelf();
-                    break;
+            case Constants.TEST_STATE_CONNECTED:
+                text = "TEST_STATE_CONNECTED";
+                break;
 
-                default:
-                    saveLog("Skip this command, " + msg.what, Constants.SAVE_TYPE_LOGCAT, Constants.MSG_UI_UNKNOWN);
-                    break;
-            }
+            case Constants.TEST_STATE_STOP:
+                text = "TEST_STATE_STOP";
+                break;
         }
+
+        return text;
     }
 }

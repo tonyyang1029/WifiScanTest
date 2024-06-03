@@ -24,16 +24,16 @@ public class WifiReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (intent.getAction().equals(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)) {
             Log.i(Constants.TAG, "-> Broadcast received, " + WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
-            boolean result = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false);
-            Message msg = mHandler.obtainMessage(Constants.MSG_CMD_CONNECT);
-            msg.arg1 = result ? 1 : 0;
+            boolean updated = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false);
+            Message msg = mHandler.obtainMessage(Constants.TEST_CMD_CHECK_SCAN_RESULT);
+            msg.arg1 = updated ? 1 : 0;
             mHandler.sendMessage(msg);
         } else if (intent.getAction().equals(WifiManager.NETWORK_STATE_CHANGED_ACTION)) {
             NetworkInfo info = intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO);
             Log.i(Constants.TAG, "-> Broadcast received, " + WifiManager.NETWORK_STATE_CHANGED_ACTION + info.toString());
             if (info.getType() == ConnectivityManager.TYPE_WIFI &&
                 info.getState() == NetworkInfo.State.CONNECTED) {
-                mHandler.sendEmptyMessage(Constants.MSG_CMD_FINISH);
+                mHandler.sendEmptyMessage(Constants.TEST_CMD_CHECK_CONNECT_RESULT);
             }
         }
     }

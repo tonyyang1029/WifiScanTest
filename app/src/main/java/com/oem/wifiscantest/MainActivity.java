@@ -44,7 +44,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mBtnStart.setText("START");
         mBtnStart.setOnClickListener(this);
 
-        Log.i(Constants.TAG, "Version: v1.8");
+        Log.i(Constants.TAG, "Version: v1.9");
     }
 
     @Override

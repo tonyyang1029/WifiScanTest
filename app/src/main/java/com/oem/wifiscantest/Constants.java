@@ -5,8 +5,8 @@ public class Constants {
 
     static final int MAX_TEST_COUNT                         = 5000;
     static final int MAX_SCAN_INTERVAL                      = 5000;
-    static final int MAX_RECONNECT_INTERVAL                 = 1000;
-    static final int MAX_TEST_INTERVAL                      = 1000;
+    static final int MAX_RECONNECT_INTERVAL                 = 5000;
+    static final int MAX_TEST_INTERVAL                      = 5000;
     static final int MAX_WAIT_TIME                          = 30000;
 
     static final int MSG_UI_LOG_NOP                         = 0;

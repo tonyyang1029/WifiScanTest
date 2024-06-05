@@ -4,19 +4,17 @@ public class Constants {
     static final String TAG = "WifiScanTest";
 
     static final int MAX_TEST_COUNT                         = 5000;
-    static final int MAX_SCAN_INTERVAL                      = 1000;
-    static final int MAX_TEST_INTERVAL                      = 5000;
-    static final int MAX_WAIT_TIME                          = 60000;
+    static final int MAX_SCAN_INTERVAL                      = 5000;
+    static final int MAX_RECONNECT_INTERVAL                 = 1000;
+    static final int MAX_TEST_INTERVAL                      = 1000;
+    static final int MAX_WAIT_TIME                          = 30000;
 
-    static final int MSG_UI_UNKNOWN                         = -1;
-    static final int MSG_UI_NOP                             = 0;
-    static final int MSG_UI_CLEAR_TEXT                      = 1;
-    static final int MSG_UI_SHOW_TEXT                       = 2;
-    static final int MSG_UI_APPEND_TEXT                     = 3;
-    static final int MSG_UI_TEST_START                      = 4;
-    static final int MSG_UI_TEST_PROGRESS                   = 5;
-    static final int MSG_UI_TEST_COMPLETE                   = 6;
-    static final int MSG_UI_TEST_STOP                       = 7;
+    static final int MSG_UI_LOG_NOP                         = 0;
+    static final int MSG_UI_LOG_SET                         = 1;
+    static final int MSG_UI_LOG_APPEND                      = 2;
+    static final int MSG_UI_STATE_SET                       = 3;
+    static final int MSG_UI_STATE_APPEND                    = 4;
+    static final int MSG_UI_STOP                            = 5;
 
     static final int TEST_STATE_UNKNOWN                     = -1;
     static final int TEST_STATE_IDLE                        = 0;
@@ -24,9 +22,11 @@ public class Constants {
     static final int TEST_STATE_SCANNING                    = 2;
     static final int TEST_STATE_RESCANNING                  = 3;
     static final int TEST_STATE_SCANNED                     = 4;
-    static final int TEST_STATE_CONNECTING                  = 5;
-    static final int TEST_STATE_CONNECTED                   = 6;
-    static final int TEST_STATE_STOP                        = 7;
+    static final int TEST_STATE_SCAN_TIMEOUT                = 5;
+    static final int TEST_STATE_CONNECTING                  = 6;
+    static final int TEST_STATE_CONNECTED                   = 7;
+    static final int TEST_STATE_CONNECT_TIMEOUT             = 8;
+    static final int TEST_STATE_STOP                        = 9;
 
     static final int TEST_CMD_UNKNOWN                       = -1;
     static final int TEST_CMD_INIT                          = 0;
@@ -35,10 +35,11 @@ public class Constants {
     static final int TEST_CMD_SCAN_TIMEOUT                  = 3;
     static final int TEST_CMD_CHECK_SCAN_RESULT             = 4;
     static final int TEST_CMD_CONNECT                       = 5;
-    static final int TEST_CMD_CONNECT_TIMEOUT               = 6;
-    static final int TEST_CMD_CHECK_CONNECT_RESULT          = 7;
-    static final int TEST_CMD_STOP                          = 8;
-    static final int TEST_CMD_STOP_SELF                     = 9;
+    static final int TEST_CMD_RECONNECT                     = 6;
+    static final int TEST_CMD_CONNECT_TIMEOUT               = 7;
+    static final int TEST_CMD_CHECK_CONNECT_RESULT          = 8;
+    static final int TEST_CMD_STOP                          = 9;
+    static final int TEST_CMD_STOP_SELF                     = 10;
 
     static final int SAVE_TYPE_UI                           = 1;
     static final int SAVE_TYPE_LOGCAT                       = 1 << 1;

@@ -12,7 +12,6 @@ import android.widget.TextView;
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -20,7 +19,8 @@ import androidx.core.view.WindowInsetsCompat;
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
     private TestRunner mWifiTestExecutor;
     private UiHandler mUiHandler;
-    private TextView mTextView;
+    private TextView mTvLog;
+    private TextView mTvState;
     private Button mBtnStart;
 
     @Override
@@ -36,13 +36,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         mUiHandler = new UiHandler();
         mWifiTestExecutor = new TestRunner(this, mUiHandler);
-        mTextView = findViewById(R.id.id_ui_textview);
-        mTextView.setText("Press START button to start testing");
+        mTvLog = findViewById(R.id.id_ui_log);
+        mTvLog.setText("Press START button to start testing");
+        mTvState = findViewById(R.id.id_ui_state);
+        mTvState.setText("Test is not running");
         mBtnStart = findViewById(R.id.id_ui_btn_start);
         mBtnStart.setText("START");
         mBtnStart.setOnClickListener(this);
 
-        Log.i(Constants.TAG, "Version: v1.7");
+        Log.i(Constants.TAG, "Version: v1.8");
     }
 
     @Override
@@ -103,28 +105,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         @Override
         public void handleMessage(@NonNull Message msg) {
             switch (msg.what) {
-                case Constants.MSG_UI_CLEAR_TEXT:
-                    mTextView.setText("");
+                case Constants.MSG_UI_LOG_SET:
+                    mTvLog.setText((CharSequence) msg.obj);
                     break;
 
-                case Constants.MSG_UI_SHOW_TEXT:
-                case Constants.MSG_UI_TEST_START:
-                    mTextView.setText((CharSequence) msg.obj);
+                case Constants.MSG_UI_LOG_APPEND:
+                    mTvLog.append((CharSequence) msg.obj);
                     break;
 
-                case Constants.MSG_UI_APPEND_TEXT:
-                case Constants.MSG_UI_TEST_PROGRESS:
-                    mTextView.append((CharSequence) msg.obj);
+                case Constants.MSG_UI_STATE_SET:
+                    mTvState.setText((CharSequence) msg.obj);
                     break;
 
-                case Constants.MSG_UI_TEST_COMPLETE:
-                    mTextView.append((CharSequence) msg.obj);
-                    mBtnStart.setText("START");
-                    mUiHandler.removeCallbacksAndMessages(null);
+                case Constants.MSG_UI_STATE_APPEND:
+                    mTvState.append((CharSequence) msg.obj);
                     break;
 
-                case Constants.MSG_UI_TEST_STOP:
-                    mTextView.append((CharSequence) msg.obj);
+                case Constants.MSG_UI_STOP:
                     mBtnStart.setText("START");
                     mUiHandler.removeCallbacksAndMessages(null);
                     break;

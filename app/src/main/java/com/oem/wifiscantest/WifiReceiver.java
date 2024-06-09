@@ -14,9 +14,11 @@ import java.net.NetworkInterface;
 import java.util.Objects;
 
 public class WifiReceiver extends BroadcastReceiver {
+    private int mCmd = Constants.TEST_CMD_UNKNOWN;
     private Handler mHandler;
 
-    public WifiReceiver(Handler handler) {
+    public WifiReceiver(int cmd, Handler handler) {
+        mCmd = cmd;
         mHandler = handler;
     }
 
@@ -25,7 +27,7 @@ public class WifiReceiver extends BroadcastReceiver {
         if (intent.getAction().equals(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)) {
             Log.i(Constants.TAG, "-> Broadcast received, " + WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
             boolean updated = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false);
-            Message msg = mHandler.obtainMessage(Constants.TEST_CMD_CHECK_SCAN_RESULT);
+            Message msg = mHandler.obtainMessage(mCmd);
             msg.arg1 = updated ? 1 : 0;
             mHandler.sendMessage(msg);
         } else if (intent.getAction().equals(WifiManager.NETWORK_STATE_CHANGED_ACTION)) {
@@ -33,7 +35,7 @@ public class WifiReceiver extends BroadcastReceiver {
             Log.i(Constants.TAG, "-> Broadcast received, " + WifiManager.NETWORK_STATE_CHANGED_ACTION + info.toString());
             if (info.getType() == ConnectivityManager.TYPE_WIFI &&
                 info.getState() == NetworkInfo.State.CONNECTED) {
-                mHandler.sendEmptyMessage(Constants.TEST_CMD_CHECK_CONNECT_RESULT);
+                mHandler.sendEmptyMessage(mCmd);
             }
         }
     }
